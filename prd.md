@@ -58,6 +58,35 @@ The product should support the following:
 
 
 
+### Recurring Availability
+
+- Availability is configured as recurring weekly schedules for each agent.
+- Each schedule has a day of week, start time, end time, and the agent's timezone.
+- Start and end times are interpreted in the agent's own timezone.
+- A schedule where `start_time < end_time` stays within the same calendar day.
+- A schedule where `start_time > end_time` crosses midnight into the following calendar day. For example, Monday 10:00 PM–2:00 AM means Monday 10:00 PM through Tuesday 2:00 AM.
+- The schedule is associated with its starting day. Therefore, Monday 10:00 PM–2:00 AM is a Monday schedule even though part of it falls on Tuesday.
+- When checking availability, the system converts the current timestamp to the agent's timezone and checks whether it falls within the applicable schedule, including overnight schedules.
+- Weekend schedules follow the same rule. For example, Saturday 10:00 PM–2:00 AM covers Saturday night through Sunday 2:00 AM.
+
+
+
+### Coverage Configuration
+
+The team lead can configure the company's recurring required coverage from the UI.
+
+The lead specifies:
+
+- Company timezone
+- Days of the week requiring coverage
+- Start and end time for each required coverage window
+
+Required coverage is defined in the company's timezone. Agent availability is defined in each agent's own timezone.
+
+The system compares the required coverage windows with the combined availability of all agents and highlights periods where no agent is scheduled to be available.
+
+
+
 ## 5. What does "fair" mean?
 
 I would keep fairness simple and predictable for the first version.
@@ -79,7 +108,10 @@ A and C are the candidates because they have the lower workload. If C was assign
 
 Each agent will have a maximum number of active tickets.
 
-An active ticket is a ticket whose status is not finished. For the MVP, statuses such as `open`, `in_progress`, and `pending` count as active, while `resolved` and `closed` do not.
+An active ticket is a ticket whose status is not finished. For the MVP, statuses such as `open`, `in_progress`, and `pending` count as active, while `resolved` and `closed` do not. 
+
+Ticket status will be read from `tickets` table in PostgreSQL, which is the source of truth for assignment decisions.  
+A ticket counts toward capacity while its status is `open`, `in_progress`, or `pending`. Once its status changes to `resolved` or `closed` in our database, it stops counting toward capacity for subsequent assignment requests.
 
 If an agent has reached their limit, they should not receive another ticket even if they are currently working.
 
