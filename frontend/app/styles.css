@@ -33,6 +33,7 @@ h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.2; letter-spacing: -.04
 .notice { margin: 0 0 18px; border-radius: 8px; padding: 12px 14px; }
 .notice.success { border: 1px solid #b7dcc9; background: #eff8f2; color: var(--success); }
 .notice.error { border: 1px solid #edc3bf; background: #fff5f4; color: var(--danger); }
+.notice.info { border: 1px solid #cbdde0; background: #f0f6f6; color: #365b5a; }
 .company-card, .agent-card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .company-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 21px 24px; margin-bottom: 38px; }
 .section-copy h2, .section-heading h2 { margin-bottom: 5px; font-size: 17px; letter-spacing: -.02em; }
@@ -73,6 +74,32 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .empty-state { border: 1px dashed #cfd8dd; border-radius: 10px; background: white; padding: 38px 20px; color: var(--muted); text-align: center; }
 .footer-note { margin-top: 18px; color: #77838c; font-size: 11px; text-align: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.view-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: -7px 0 25px; }
+.view-tabs button { position: relative; border: 0; background: transparent; padding: 10px 13px 12px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.view-tabs button.active { color: var(--accent-dark); }
+.view-tabs button.active::after { position: absolute; right: 9px; bottom: -1px; left: 9px; height: 2px; background: var(--accent); content: ""; }
+.ticket-create-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; border: 1px solid var(--line); border-radius: 12px; background: white; padding: 21px 24px; margin-bottom: 30px; }
+.ticket-create-card h2 { margin-bottom: 5px; font-size: 17px; }
+.ticket-create-card p:last-child { margin-bottom: 0; color: var(--muted); font-size: 12px; }
+.ticket-create-form { display: flex; width: min(100%, 460px); gap: 9px; }
+.ticket-create-form input { min-width: 0; }
+.tickets-heading { margin-top: 0; }
+.ticket-list { display: grid; gap: 10px; }
+.ticket-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--line); border-radius: 10px; background: white; padding: 17px 20px; }
+.ticket-main { min-width: 0; }
+.ticket-title-line { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.ticket-title-line h3 { overflow-wrap: anywhere; margin-bottom: 0; font-size: 14px; }
+.ticket-meta, .ticket-assignee { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+.ticket-assignee strong { color: #35434d; }
+.ticket-assignee strong.unassigned { color: #8a5a21; }
+.assignment-reason { margin: 6px 0 0; color: #78848c; font-size: 11px; }
+.status-pill { border-radius: 999px; background: #edf1f3; padding: 4px 8px; color: #46545e; font-size: 10px; font-weight: 600; text-transform: capitalize; }
+.status-open { background: #eef4f5; color: #35636a; }
+.status-in_progress { background: #eaf3ee; color: #3c684c; }
+.status-pending { background: #faf3e6; color: #85652d; }
+.status-resolved, .status-closed { background: #eef0f1; color: #67727a; }
+.ticket-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; }
+.ticket-actions select { width: 125px; min-height: 36px; font-size: 11px; text-transform: capitalize; }
 
 @media (max-width: 640px) {
   .topbar { padding: 0 18px; }
@@ -81,6 +108,10 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
   h1 { font-size: 25px; }
   .company-card { align-items: stretch; flex-direction: column; gap: 16px; padding: 18px; margin-bottom: 28px; }
   .company-control { width: 100%; }
+  .ticket-create-card { align-items: stretch; flex-direction: column; gap: 14px; padding: 18px; }
+  .ticket-create-form { width: 100%; }
+  .ticket-card { align-items: stretch; flex-direction: column; gap: 13px; padding: 16px; }
+  .ticket-actions { justify-content: flex-end; }
   .agent-card { padding: 18px; }
   .agent-heading { gap: 9px; }
   .agent-fields { grid-template-columns: 1fr; gap: 14px; }

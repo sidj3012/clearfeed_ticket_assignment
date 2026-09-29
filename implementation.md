@@ -613,6 +613,19 @@ POST /api/companies/{company_id}/tickets/{ticket_id}/assign
 
 Assigns the ticket or returns a clear no-assignment reason.
 
+This endpoint also retries assignment for a previously unassigned ticket. Repeated requests return the existing assignment.
+
+
+### Ticket management
+
+```text
+POST /api/companies/{company_id}/tickets
+GET /api/companies/{company_id}/tickets
+PATCH /api/tickets/{ticket_id}
+```
+
+Ticket creation starts with `open` status and immediately attempts assignment using the shared assignment service. If no agent is eligible, the ticket is still created and the response explains why it remains unassigned. The list endpoint returns tickets with their assigned agent, when present. The status endpoint accepts `open`, `in_progress`, `pending`, `resolved`, or `closed`.
+
 ### Agent list
 
 ```text

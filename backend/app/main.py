@@ -1,15 +1,25 @@
 import os
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
+from .assignment import assign_ticket
 from .database import Base, engine, get_db
-from .models import Agent, AvailabilityWindow, Company
-from .schemas import AgentConfigUpdate, AgentRead, AvailabilityWindowInput, CompanyRead
+from .models import Agent, Assignment, AvailabilityWindow, Company, Ticket
+from .schemas import (
+    AgentConfigUpdate,
+    AgentRead,
+    AvailabilityWindowInput,
+    AvailabilityWindowRead,
+    CompanyRead,
+    TicketCreate,
+    TicketListRead,
+    TicketStatusUpdate,
+    TicketWorkflowRead,
+)
 
 
 app = FastAPI(title="Ticket Assignment API", version="0.1.0")
@@ -18,7 +28,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "PUT", "OPTIONS"],
+    allow_methods=["GET", "PUT", "POST", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
@@ -125,3 +135,91 @@ def update_company_timezone(
     db.commit()
     db.refresh(company)
     return company
+
+
+@app.post(
+    "/api/companies/{company_id}/tickets",
+    response_model=TicketWorkflowRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_ticket(company_id: int, payload: TicketCreate, db: Session = Depends(get_db)) -> dict:
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    ticket = Ticket(company_id=company_id, subject=payload.subject, status="open")
+    db.add(ticket)
+    db.flush()
+    result = assign_ticket(db, ticket)
+    db.commit()
+    return result
+
+
+@app.get("/api/companies/{company_id}/tickets", response_model=list[TicketListRead])
+def list_tickets(company_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    if db.get(Company, company_id) is None:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    tickets = list(
+        db.scalars(
+            select(Ticket)
+            .where(Ticket.company_id == company_id)
+            .options(joinedload(Ticket.assignment).joinedload(Assignment.agent))
+            .order_by(Ticket.created_at.desc(), Ticket.id.desc())
+        ).all()
+    )
+    return [
+        {
+            "id": ticket.id,
+            "company_id": ticket.company_id,
+            "subject": ticket.subject,
+            "status": ticket.status,
+            "created_at": ticket.created_at,
+            "agent": (
+                {"id": ticket.assignment.agent.id, "name": ticket.assignment.agent.name}
+                if ticket.assignment is not None
+                else None
+            ),
+            "assignment_reason": ticket.assignment.reason if ticket.assignment is not None else None,
+        }
+        for ticket in tickets
+    ]
+
+
+@app.post(
+    "/api/companies/{company_id}/tickets/{ticket_id}/assign",
+    response_model=TicketWorkflowRead,
+)
+def retry_ticket_assignment(company_id: int, ticket_id: int, db: Session = Depends(get_db)) -> dict:
+    ticket = db.scalar(select(Ticket).where(Ticket.id == ticket_id, Ticket.company_id == company_id))
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found for this company.")
+    result = assign_ticket(db, ticket)
+    db.commit()
+    return result
+
+
+@app.patch("/api/tickets/{ticket_id}", response_model=TicketListRead)
+def update_ticket_status(ticket_id: int, payload: TicketStatusUpdate, db: Session = Depends(get_db)) -> dict:
+    ticket = db.scalar(
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(joinedload(Ticket.assignment).joinedload(Assignment.agent))
+    )
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found.")
+    ticket.status = payload.status
+    db.commit()
+    return {
+        "id": ticket.id,
+        "company_id": ticket.company_id,
+        "subject": ticket.subject,
+        "status": ticket.status,
+        "created_at": ticket.created_at,
+        "agent": (
+            {"id": ticket.assignment.agent.id, "name": ticket.assignment.agent.name}
+            if ticket.assignment is not None
+            else None
+        ),
+        "assignment_reason": ticket.assignment.reason if ticket.assignment is not None else None,
+    }

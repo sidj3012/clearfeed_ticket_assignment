@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -66,3 +66,41 @@ class CoverageWindow(Base):
     day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     end_time: Mapped[time] = mapped_column(Time, nullable=False)
+
+
+class Ticket(Base):
+    __tablename__ = "tickets"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'pending', 'resolved', 'closed')",
+            name="ck_tickets_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    subject: Mapped[str] = mapped_column(String(240), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    company: Mapped[Company] = relationship()
+    assignment: Mapped["Assignment | None"] = relationship(
+        back_populates="ticket", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, unique=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    ticket: Mapped[Ticket] = relationship(back_populates="assignment")
+    agent: Mapped[Agent] = relationship()

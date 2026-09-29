@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -63,3 +63,56 @@ class CompanyRead(BaseModel):
     id: int
     name: str
     timezone: str
+
+
+class TicketCreate(BaseModel):
+    subject: str = Field(min_length=1, max_length=240)
+
+    @field_validator("subject")
+    @classmethod
+    def subject_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Ticket subject cannot be blank.")
+        return value
+
+
+class TicketStatusUpdate(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def status_must_be_supported(cls, value: str) -> str:
+        allowed = {"open", "in_progress", "pending", "resolved", "closed"}
+        if value not in allowed:
+            raise ValueError("Status must be open, in_progress, pending, resolved, or closed.")
+        return value
+
+
+class TicketAgentRead(BaseModel):
+    id: int
+    name: str
+
+
+class TicketWorkflowRead(BaseModel):
+    id: int
+    company_id: int
+    subject: str
+    status: str
+    created_at: datetime
+    assigned: bool
+    agent: TicketAgentRead | None = None
+    current_workload: int | None = None
+    assigned_at: datetime | None = None
+    reason_code: str | None = None
+    reason: str
+
+
+class TicketListRead(BaseModel):
+    id: int
+    company_id: int
+    subject: str
+    status: str
+    created_at: datetime
+    agent: TicketAgentRead | None = None
+    assignment_reason: str | None = None

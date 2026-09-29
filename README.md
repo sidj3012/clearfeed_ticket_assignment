@@ -5,8 +5,8 @@ An MVP for managing agent schedules and assigning support tickets fairly across 
 ## Delivery phases
 
 1. **Agent setup (implemented):** FastAPI/PostgreSQL foundation, demo seed data, company timezone, agent timezone and capacity, and recurring weekly availability.
-2. **Ticket workflow:** Ticket creation and status updates, assignment decisions, workload counting, fairness, and clear no-assignment results.
-3. **Coverage and reliability:** Coverage calculations and gap view, plus transaction and concurrency protection for assignment.
+2. **Ticket workflow (implemented):** Ticket creation and status updates, automatic and manual assignment, workload counting, fairness, clear no-assignment results, and retry for unassigned tickets.
+3. **Coverage and reliability:** Coverage calculations and gap view, plus row-level locking and concurrency protection for assignment.
 
 The UI uses a restrained white and slate palette with teal accents. It does not use purple or gradients.
 
@@ -47,7 +47,7 @@ npm run dev
 
 Open `http://localhost:3000`. The UI uses company ID `1` from the seed data and the API at `http://localhost:8000`. Set `NEXT_PUBLIC_API_URL` when the API uses a different address.
 
-## Phase 1 API
+## API
 
 - `GET /health`
 - `GET /api/companies/{company_id}`
@@ -55,5 +55,11 @@ Open `http://localhost:3000`. The UI uses company ID `1` from the seed data and 
 - `GET /api/companies/{company_id}/agents`
 - `PUT /api/companies/{company_id}/agents/{agent_id}`
 - `PUT /api/companies/{company_id}/agents/{agent_id}/availability`
+- `POST /api/companies/{company_id}/tickets`
+- `GET /api/companies/{company_id}/tickets`
+- `POST /api/companies/{company_id}/tickets/{ticket_id}/assign`
+- `PATCH /api/tickets/{ticket_id}`
 
 Availability days use Monday `0` through Sunday `6`. A start time later than the end time represents an overnight window. Equal start and end times are rejected.
+
+Run the backend tests from the backend directory with `pytest`.
