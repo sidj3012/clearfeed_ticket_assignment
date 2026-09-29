@@ -7,7 +7,7 @@
 - Database: PostgreSQL
 - Tests: Pytest
 
-The UI will be used by the team lead or any member of company to manage agent availability, agent workload limits, company timezone, and required team coverage.
+The UI will be used by the team lead or any member of company to manage agent availability, agent workload limits, company timezone, create new ticket, change ticket status,  and required team coverage.
 
 The backend will expose the assignment API and will be the source of truth for availability and assignment decisions.
 
@@ -33,8 +33,6 @@ The company timezone is used for required coverage configuration and coverage re
 - `timezone`
 - `max_active_tickets`
 - `last_assigned_at`
-
-Each agent has one timezone.
 
 ### availability_windows
 
@@ -68,7 +66,7 @@ Coverage windows use the company's timezone.
 - `subject`
 - `created_at`
 
-For the MVP, ticket status in this table is the source of truth used to calculate active workload.
+
 
 Active statuses:
 
@@ -81,7 +79,8 @@ Inactive statuses:
 - `resolved`
 - `closed`
 
-We are not handling external status sync for the MVP.
+Ticket can be created from UI.   
+Ticket status can be updated from UI.
 
 ### assignments
 
@@ -94,8 +93,6 @@ We are not handling external status sync for the MVP.
 There should be a unique constraint on `ticket_id` so one ticket cannot have two assignments.
 
 ---
-
-
 
 ## 3. Recurring Availability
 
@@ -133,8 +130,6 @@ means:
 ```text
 Monday 09:00 -> Monday 17:00
 ```
-
-
 
 ### Overnight schedule
 
@@ -187,8 +182,6 @@ So it contributes availability to early Sunday.
 
 ---
 
-
-
 ## 4. Availability Check
 
 The backend captures the current instant once as a timezone-aware UTC timestamp.
@@ -239,8 +232,6 @@ This means:
 - 2:00 PM -> available
 - exactly 5:00 PM -> not available
 
-
-
 ### Checking an overnight schedule
 
 For a schedule such as:
@@ -280,8 +271,6 @@ This prevents a Monday 10 PM-2 AM shift from incorrectly disappearing at midnigh
 
 ---
 
-
-
 ## 5. Required Coverage
 
 The team lead configures recurring required coverage through the UI.
@@ -310,8 +299,6 @@ means the company wants at least one agent scheduled between 9 AM and 6 PM India
 Agent availability remains in each agent's own timezone.
 
 When calculating coverage, agent schedules are converted to the company's timezone and compared against the required coverage windows.
-
-
 
 ### Overnight coverage
 
@@ -362,8 +349,6 @@ The coverage feature is for planning and visibility. It does not directly assign
 
 ---
 
-
-
 ## 6. Assignment Logic
 
 When:
@@ -402,8 +387,6 @@ If there are no agents:
 reason_code = NO_AGENTS_FOUND
 ```
 
-
-
 ### Step 4: Check current availability
 
 For every company agent, check whether they are currently available using the agent's own timezone and the recurring schedule rules described above.
@@ -413,8 +396,6 @@ If nobody is currently available:
 ```text
 reason_code = NO_AVAILABLE_AGENT
 ```
-
-
 
 ### Step 5: Check workload capacity
 
@@ -442,8 +423,6 @@ If agents are available but every available agent is at capacity:
 reason_code = ALL_AGENTS_AT_CAPACITY
 ```
 
-
-
 ### Step 6: Choose the fairest eligible agent
 
 Among eligible agents:
@@ -470,8 +449,6 @@ A -> selected
 C -> not selected
 ```
 
-
-
 ### Step 7: Save the assignment
 
 Create the assignment record and update the selected agent's `last_assigned_at` in the same database transaction.
@@ -495,8 +472,6 @@ Example:
 
 ---
 
-
-
 ## 7. No-Assignment Responses
 
 The API should return a specific reason whenever possible.
@@ -511,8 +486,6 @@ The API should return a specific reason whenever possible.
 }
 ```
 
-
-
 ### Nobody is currently working
 
 ```json
@@ -522,8 +495,6 @@ The API should return a specific reason whenever possible.
   "reason": "No agent is currently scheduled to be available."
 }
 ```
-
-
 
 ### Everyone available is at capacity
 
@@ -539,13 +510,9 @@ The API should return a specific reason whenever possible.
 
 ---
 
-
-
 ## 8. Ticket Status and External Sync
 
-For the MVP, ticket status is read from the `tickets` table in PostgreSQL.
-
-That is the source of truth for assignment decisions and workload calculation.
+Ticket status can be updated through UI.
 
 If a ticket changes from:
 
@@ -563,9 +530,7 @@ in our database, it stops counting toward capacity for subsequent assignment req
 
 External ticketing-system integrations are out of scope for the MVP.
 
-If an external source system is introduced later, an API integration or synchronization mechanism will be required to keep the local ticket status up to date. Otherwise, the workload calculation could use stale status data.
-
-
+If an external source system is introduced later, an API integration or synchronization mechanism will be required to keep the local ticket status up to date or ticket status can be updated manually through UI. Otherwise, the workload calculation could use stale status data.
 
 **Ticket Management (MVP)**
 
@@ -578,8 +543,6 @@ Status changes will be persisted through `PATCH /api/tickets/{ticket_id}`. The l
 Ticket creation and external ticketing-system synchronization are out of scope for the MVP.
 
 ---
-
-
 
 ## 9. Idempotency and Concurrency
 
@@ -608,11 +571,7 @@ If two requests arrive for the same ticket at the same time, the unique `ticket_
 
 ---
 
-
-
 ## 10. API Endpoints
-
-
 
 ### Assignment
 
@@ -645,7 +604,34 @@ The API validates:
 - `start_time != end_time`
 - valid IANA timezone for the agent
 
+### Agent Configuration
 
+The UI will allow the team lead to view and update each agent's configuration, including their maximum active-ticket capacity.
+
+Agent capacity will be persisted through:
+
+```http
+PUT /api/companies/{company_id}/agents/{agent_id}
+
+```
+
+Example request:
+
+```json
+{
+  "max_active_tickets": 10
+}
+```
+
+The endpoint will validate that `max_active_tickets` is a positive integer and update the corresponding agent record.
+
+The agent configuration UI will:
+
+- Display the agent's name.
+- Display the agent's timezone.
+- Display the current maximum active-ticket limit.
+- Allow the team lead to update the maximum active-ticket limit.
+- Save the updated limit through the agent update endpoint.
 
 ### Coverage configuration
 
@@ -662,8 +648,6 @@ The API validates:
 - valid time format
 - `start_time != end_time`
 
-
-
 ### Coverage view
 
 ```text
@@ -673,8 +657,6 @@ GET /api/companies/{company_id}/coverage
 Returns the configured required coverage and calculated covered/gap periods for the UI.
 
 ---
-
-
 
 ## 11. UI
 
@@ -690,8 +672,6 @@ The team lead can:
 - add/edit recurring weekly availability
 - see overnight schedules clearly, for example `Mon 10 PM - Tue 2 AM`
 
-
-
 ### Coverage
 
 The team lead can:
@@ -703,13 +683,187 @@ The team lead can:
 
 A simple weekly table/calendar view is enough for the MVP.
 
-
-
 The UI will include a lightweight Tickets section for viewing existing tickets and changing their status.
 
 ---
 
+### Ticket Creation and Automatic Assignment
 
+The MVP will provide a lightweight ticket creation flow so the complete assignment workflow can be exercised from the UI without manually inserting tickets into the database.
+
+The UI will provide a `+ Create Ticket` action in the Tickets section.
+
+The creation form will contain:
+
+- Ticket subject
+
+New tickets will always start with `open` status. The system will automatically attempt to assign the ticket immediately after creation.
+
+#### Create Ticket API
+
+```http
+POST /api/companies/{company_id}/tickets
+```
+
+Example request:
+
+```json
+{
+  "subject": "Customer cannot login"
+}
+```
+
+The backend will create the ticket with:
+
+```text
+status = open
+company_id = path parameter
+created_at = current timestamp
+```
+
+It will then invoke the same assignment service used by the explicit assignment API.
+
+If an eligible agent is found, the ticket is assigned automatically:
+
+```json
+{
+  "id": 104,
+  "company_id": 1,
+  "subject": "Customer cannot login",
+  "status": "open",
+  "assigned": true,
+  "agent": {
+    "id": 12,
+    "name": "Rahul"
+  },
+  "reason": "Assigned to Rahul because he has the lowest active workload among currently available agents."
+}
+```
+
+If no eligible agent is available, the ticket remains unassigned rather than failing to create:
+
+```json
+{
+  "id": 104,
+  "company_id": 1,
+  "subject": "Customer cannot login",
+  "status": "open",
+  "assigned": false,
+  "reason_code": "ALL_AGENTS_AT_CAPACITY",
+  "reason": "All currently available agents have reached their active ticket limit."
+}
+```
+
+The API will validate that the company exists before creating the ticket.
+
+#### Assignment Logic Reuse
+
+Automatic assignment and the explicit assignment API will use the same assignment service to avoid duplicate assignment logic.
+
+```text
+Create Ticket ──→ Assignment Service
+                         ↑
+Explicit Assign API ────┘
+
+```
+
+#### Ticket UI
+
+The Tickets section will display:
+
+- Ticket ID
+- Subject
+- Current status
+- Assigned agent, if any
+- Status change action
+- Assignment/retry action for unassigned tickets
+
+After creation, the UI will immediately show whether the ticket was assigned.
+
+Example:
+
+```text
+Ticket #104 created and assigned to Rahul.
+
+```
+
+or:
+
+```text
+Ticket #104 created but remains unassigned.
+
+Reason:
+All currently available agents have reached their active ticket limit.
+
+```
+
+#### Ticket Lifecycle
+
+The supported statuses are:
+
+```text
+open
+in_progress
+pending
+resolved
+closed
+```
+
+`open`, `in_progress`, and `pending` count toward active workload. `resolved` and `closed` do not.
+
+A typical flow is:
+
+```text
+Create Ticket
+      ↓
+Open + automatic assignment
+      ↓
+In Progress
+      ↓
+Pending (if required)
+      ↓
+Resolved / Closed
+      ↓
+No longer counted toward active workload
+```
+
+Status changes are handled separately through the ticket status update flow.
+
+### Demo Data / Seed Process
+
+Since company and agent creation are out of scope for the MVP, the application will provide a database seed script containing the records required to exercise the complete flow locally.
+
+The seed data will include:
+
+- One demo company with a configured company timezone.
+- Multiple agents belonging to the company.
+- Different agent timezones.
+- Recurring availability schedules, including at least one overnight schedule.
+- Different `max_active_tickets` values.
+- A recurring company coverage requirement.
+- Multiple tickets with a mix of `open`, `in_progress`, `pending`, `resolved`, and `closed` statuses.
+- Existing assignments where useful for demonstrating workload and fairness.
+
+The seed script will be safe to run against a fresh local database and will create the required records in the correct dependency order:
+
+```text
+Company
+   ↓
+Agents
+   ↓
+Availability
+   ↓
+Coverage configuration
+   ↓
+Tickets
+   ↓
+Existing assignments
+
+```
+
+The exact seeded IDs will be documented or made visible through the UI/API so the assignment flow can be exercised without manually creating records.
+
+---
 
 ## 12. Validation and Edge Cases
 
@@ -738,11 +892,7 @@ The implementation should handle:
 
 ---
 
-
-
 ## 13. Tests
-
-
 
 ### Availability
 
@@ -761,8 +911,6 @@ Test:
 - timezone conversion that changes the local date
 - invalid `start_time == end_time`
 
-
-
 ### Coverage
 
 Test:
@@ -775,8 +923,6 @@ Test:
 - weekend overnight schedules
 - company timezone conversion
 - multiple coverage windows on a day
-
-
 
 ### Assignment
 
@@ -793,8 +939,6 @@ Test:
 - returns `ALL_AGENTS_AT_CAPACITY`
 - returns the existing assignment for an already assigned ticket
 - prevents duplicate assignment under concurrent requests
-
-
 
 ### Workload
 
