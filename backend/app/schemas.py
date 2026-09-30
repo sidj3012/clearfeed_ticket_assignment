@@ -2,17 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from typing import Optional
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-def validate_timezone(value: str) -> str:
-    try:
-        ZoneInfo(value)
-    except (ZoneInfoNotFoundError, ValueError):
-        raise ValueError("Use a valid IANA timezone, such as Asia/Kolkata.") from None
-    return value
+from .timezones import validate_timezone
 
 
 class AvailabilityWindowInput(BaseModel):

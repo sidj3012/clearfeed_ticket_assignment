@@ -10,6 +10,7 @@ from app import assignment
 from app import coverage as coverage_module
 from app.database import Base, get_db
 from app import main as main_module
+from app.routers import agents as agents_router
 from app.main import app
 from app.models import Agent, Assignment, AvailabilityWindow, Company, Ticket
 
@@ -25,7 +26,6 @@ def api(monkeypatch):
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(main_module, "engine", engine)
     testing_sessions = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
     def override_get_db():
@@ -356,6 +356,14 @@ def test_validation_rejects_invalid_timezone_day_time_and_equal_schedule_times(a
     assert equal_times.status_code == 422
 
 
+def test_models_reject_invalid_timezones_outside_api_validation():
+    with pytest.raises(ValueError, match="valid IANA timezone"):
+        Company(name="Invalid timezone", timezone="Not/A_Timezone")
+
+    with pytest.raises(ValueError, match="valid IANA timezone"):
+        Agent(company_id=1, name="Invalid timezone", timezone="Not/A_Timezone")
+
+
 def test_create_returns_capacity_reason_when_all_available_agents_are_full(api):
     client, testing_sessions = api
     agent_id = add_agent(testing_sessions, capacity=1)
@@ -450,7 +458,7 @@ def test_agent_overview_reports_workload_live_availability_and_utc_hours(api, mo
     with testing_sessions() as session:
         session.get(Agent, agent_id).timezone = "Asia/Kolkata"
         session.commit()
-    monkeypatch.setattr(main_module, "utc_now", lambda: FIXED_NOW)
+    monkeypatch.setattr(agents_router, "utc_now", lambda: FIXED_NOW)
 
     created = client.post("/api/companies/1/tickets", json={"subject": "India shift issue"})
     response = client.get("/api/companies/1/agents/overview")

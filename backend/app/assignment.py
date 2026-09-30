@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from .models import Agent, Assignment, AvailabilityWindow, Ticket
+from .models import Agent, Assignment, Ticket
 
 
 ACTIVE_STATUSES = ("open", "in_progress", "pending")

@@ -23,7 +23,6 @@ def test_concurrent_retries_do_not_exceed_agent_capacity(monkeypatch):
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    monkeypatch.setattr("app.main.engine", engine)
     with sessions() as session:
         company = Company(name="Concurrency test", timezone="UTC")
         session.add(company)
@@ -90,7 +89,6 @@ def test_concurrent_retries_for_same_ticket_create_only_one_assignment(monkeypat
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    monkeypatch.setattr("app.main.engine", engine)
     with sessions() as session:
         company = Company(name="Concurrent retry test", timezone="UTC")
         session.add(company)

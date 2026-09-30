@@ -2,12 +2,11 @@ from datetime import datetime, time, timedelta, timezone as dt_timezone
 
 from sqlalchemy import select, text
 
-from .database import Base, SessionLocal, engine
+from .database import SessionLocal, engine
 from .models import Agent, Assignment, AvailabilityWindow, Company, CoverageWindow, Ticket
 
 
 def seed() -> None:
-    Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         company = db.scalar(select(Company).where(Company.id == 1))
         if company is None:

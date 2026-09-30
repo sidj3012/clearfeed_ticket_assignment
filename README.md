@@ -21,11 +21,12 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+alembic upgrade head
 python -m app.seed
 uvicorn app.main:app --reload
 ```
 
-The API is available at `http://localhost:8000`; interactive API documentation is at `http://localhost:8000/docs`. The seed command creates the demo company with ID `1`, three agents, example schedules and coverage, and five sample tickets with several statuses and assignments. Startup creates the database tables if they do not exist.
+The API is available at `http://localhost:8000`; interactive API documentation is at `http://localhost:8000/docs`. Apply schema migrations with `alembic upgrade head` before seeding. The seed command only populates the demo company with ID `1`, three agents, example schedules and coverage, and five sample tickets with several statuses and assignments. For a database whose schema was created by an earlier version of the app, run `alembic stamp head` once instead of `alembic upgrade head` after confirming its schema matches the current models, then run the seed command.
 
 To use a different database, set `DATABASE_URL` before starting the API. `backend/.env.example` shows the local default connection string (`localhost:5433`).
 
@@ -191,4 +192,3 @@ All test cases listed in `implementation.md` are automated. None of those planne
 6. Automatically retry assignment when it has failed previously  with FCFS or priority queue.
 7. Apart from agent's timezone, all timezone in UI should be displayed in company's timezone for better visualization.
 8. With current MVP, agent might have to do overtime - For example, let's say agent logout time is 6 pm and 5 tickets are assigned at 5:30 pm, then agent might have to do overtime. To solve this we can change the availability formula to 'start_time <= current_time < (end_time - number_of_tickets_assigned * average_time_for_one_ticket)
-
