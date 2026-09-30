@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime, time, timezone
+from typing import Optional
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,13 +30,13 @@ class Agent(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
     max_active_tickets: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
-    last_assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     company: Mapped[Company] = relationship(back_populates="agents")
     availability_windows: Mapped[list["AvailabilityWindow"]] = relationship(
         back_populates="agent",
         cascade="all, delete-orphan",
-        order_by=("AvailabilityWindow.day_of_week", "AvailabilityWindow.start_time"),
+        order_by=lambda: (AvailabilityWindow.day_of_week, AvailabilityWindow.start_time),
     )
 
 
@@ -86,7 +89,7 @@ class Ticket(Base):
     )
 
     company: Mapped[Company] = relationship()
-    assignment: Mapped["Assignment | None"] = relationship(
+    assignment: Mapped[Optional["Assignment"]] = relationship(
         back_populates="ticket", cascade="all, delete-orphan", uselist=False
     )
 

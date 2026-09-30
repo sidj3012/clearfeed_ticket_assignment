@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -42,7 +44,12 @@ def active_workload(db: Session, agent_id: int) -> int:
     return int(db.scalar(query) or 0)
 
 
-def no_assignment_result(db: Session, ticket: Ticket, reason_code: str) -> dict:
+def no_assignment_result(
+    db: Session,
+    ticket: Ticket,
+    reason_code: str,
+    available_agents: list[Agent] | None = None,
+) -> dict:
     reasons = {
         "NO_AGENTS_FOUND": "No agents are configured for this company.",
         "NO_AVAILABLE_AGENT": "No agent is currently scheduled to be available.",
@@ -60,6 +67,15 @@ def no_assignment_result(db: Session, ticket: Ticket, reason_code: str) -> dict:
         "assigned_at": None,
         "reason_code": reason_code,
         "reason": reasons[reason_code],
+        "available_agents": [
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "active_ticket_count": active_workload(db, agent.id),
+                "max_active_tickets": agent.max_active_tickets,
+            }
+            for agent in available_agents or []
+        ],
     }
 
 
@@ -87,6 +103,7 @@ def assign_ticket(db: Session, ticket: Ticket, instant: datetime | None = None) 
             select(Agent)
             .where(Agent.company_id == ticket.company_id)
             .options(selectinload(Agent.availability_windows))
+            .with_for_update()
             .order_by(Agent.id)
         ).all()
     )
@@ -101,22 +118,23 @@ def assign_ticket(db: Session, ticket: Ticket, instant: datetime | None = None) 
     counts = {agent.id: active_workload(db, agent.id) for agent in available}
     eligible = [agent for agent in available if counts[agent.id] < agent.max_active_tickets]
     if not eligible:
-        return no_assignment_result(db, ticket, "ALL_AGENTS_AT_CAPACITY")
+        return no_assignment_result(db, ticket, "ALL_AGENTS_AT_CAPACITY", available)
 
-    def fairness_key(agent: Agent) -> tuple[int, datetime, int]:
+    def tie_break_key(agent: Agent) -> tuple[datetime, int]:
         last_assigned = agent.last_assigned_at
         if last_assigned is None:
             last_assigned = datetime.min.replace(tzinfo=timezone.utc)
         elif last_assigned.tzinfo is None:
             last_assigned = last_assigned.replace(tzinfo=timezone.utc)
-        return counts[agent.id], last_assigned, agent.id
+        return last_assigned, agent.id
 
-    selected = min(eligible, key=fairness_key)
+    lowest_workload = min(counts[agent.id] for agent in eligible)
+    fairest_candidates = [agent for agent in eligible if counts[agent.id] == lowest_workload]
+    selected = min(fairest_candidates, key=tie_break_key)
     assigned_at = check_at
-    reason = (
-        f"{selected.name} was selected because they are currently available, have the lowest active workload, "
-        "and were assigned least recently among tied candidates."
-    )
+    reason = f"{selected.name} was selected because they are currently available and have the lowest active workload ({lowest_workload})."
+    if len(fairest_candidates) > 1:
+        reason += " They were assigned least recently among candidates tied on workload."
     try:
         with db.begin_nested():
             assignment = Assignment(ticket_id=ticket.id, agent_id=selected.id, assigned_at=assigned_at, reason=reason)
