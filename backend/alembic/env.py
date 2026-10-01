@@ -4,6 +4,7 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+# Import models so every mapped table is registered in the metadata Alembic inspects.
 from app.database import Base
 from app import models  # noqa: F401 - register model metadata for Alembic.
 
@@ -12,6 +13,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Prefer the app's configured database over the local default in alembic.ini.
 database_url = os.getenv("DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
@@ -20,6 +22,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    # Emit SQL without opening a database connection when Alembic runs in offline mode.
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -33,6 +36,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    # Run versioned schema changes using a short-lived migration connection.
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

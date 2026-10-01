@@ -1,3 +1,5 @@
+"""PostgreSQL-only tests for row locking and assignment uniqueness under races."""
+
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timezone
@@ -14,6 +16,7 @@ from app.models import Agent, Assignment, AvailabilityWindow, Company, Ticket
 
 @pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="Set TEST_DATABASE_URL to run PostgreSQL locking coverage.")
 def test_concurrent_retries_do_not_exceed_agent_capacity(monkeypatch):
+    # A real PostgreSQL engine is required because SQLite does not implement row locks.
     engine = create_engine(os.environ["TEST_DATABASE_URL"], pool_size=8, max_overflow=4, pool_pre_ping=True)
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -44,7 +47,7 @@ def test_concurrent_retries_do_not_exceed_agent_capacity(monkeypatch):
         first_id, second_id = first.id, second.id
         session.commit()
 
-    # Both requests are started with a free agent and race to claim the final slot.
+    # Both requests see the final free slot; the agent-row lock must allow only one claim.
     with sessions() as session:
         session.add(
             AvailabilityWindow(
@@ -80,6 +83,7 @@ def test_concurrent_retries_do_not_exceed_agent_capacity(monkeypatch):
 
 @pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="Set TEST_DATABASE_URL to run PostgreSQL locking coverage.")
 def test_concurrent_retries_for_same_ticket_create_only_one_assignment(monkeypatch):
+    # Verify idempotency when two requests retry the exact same unassigned ticket.
     engine = create_engine(os.environ["TEST_DATABASE_URL"], pool_size=8, max_overflow=4, pool_pre_ping=True)
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -120,6 +124,7 @@ def test_concurrent_retries_for_same_ticket_create_only_one_assignment(monkeypat
             def retry():
                 return client.post(f"/api/companies/{company_id}/tickets/{ticket_id}/assign")
 
+            # Send both retries at once to exercise the unique ticket_id constraint.
             with ThreadPoolExecutor(max_workers=2) as pool:
                 results = list(pool.map(lambda _index: retry(), range(2)))
 

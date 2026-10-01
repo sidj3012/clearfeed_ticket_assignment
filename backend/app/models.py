@@ -11,6 +11,7 @@ from .timezones import validate_timezone
 
 
 class Company(Base):
+    # A company owns its agents and defines the timezone used for coverage reporting.
     __tablename__ = "companies"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -19,12 +20,14 @@ class Company(Base):
 
     @validates("timezone")
     def validate_company_timezone(self, _key: str, value: str) -> str:
+        # Validate ORM writes too, including values created outside API schemas.
         return validate_timezone(value)
 
     agents: Mapped[list["Agent"]] = relationship(back_populates="company", cascade="all, delete-orphan")
 
 
 class Agent(Base):
+    # Agent workload limits and recurring schedules drive assignment eligibility.
     __tablename__ = "agents"
     __table_args__ = (
         CheckConstraint("max_active_tickets > 0", name="ck_agents_positive_capacity"),
@@ -39,6 +42,7 @@ class Agent(Base):
 
     @validates("timezone")
     def validate_agent_timezone(self, _key: str, value: str) -> str:
+        # Store only IANA timezones that Python can use for schedule conversion.
         return validate_timezone(value)
 
     company: Mapped[Company] = relationship(back_populates="agents")
@@ -50,6 +54,7 @@ class Agent(Base):
 
 
 class AvailabilityWindow(Base):
+    # A recurring local-time window; a start later than end represents overnight hours.
     __tablename__ = "availability_windows"
     __table_args__ = (
         CheckConstraint("day_of_week >= 0 AND day_of_week <= 6", name="ck_availability_day_range"),
@@ -67,6 +72,7 @@ class AvailabilityWindow(Base):
 
 
 class CoverageWindow(Base):
+    # Required company coverage windows are compared with the union of agent hours.
     __tablename__ = "coverage_windows"
     __table_args__ = (
         CheckConstraint("day_of_week >= 0 AND day_of_week <= 6", name="ck_coverage_day_range"),
@@ -81,6 +87,7 @@ class CoverageWindow(Base):
 
 
 class Ticket(Base):
+    # Ticket status determines whether its assignment counts against agent capacity.
     __tablename__ = "tickets"
     __table_args__ = (
         CheckConstraint(
@@ -104,6 +111,7 @@ class Ticket(Base):
 
 
 class Assignment(Base):
+    # Each ticket can have at most one current agent assignment.
     __tablename__ = "assignments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -1,4 +1,5 @@
 services:
+  # Local PostgreSQL instance used by the API, seed command, and locking tests.
   db:
     image: postgres:16-alpine
     environment:
@@ -16,4 +17,5 @@ services:
       retries: 10
 
 volumes:
+  # Preserve the local database between Compose restarts.
   postgres_data:

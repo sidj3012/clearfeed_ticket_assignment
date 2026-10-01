@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 from datetime import datetime, time
-from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Annotated, Optional
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+
+from .enums import TicketStatus, UnassignedReasonCode
 from .timezones import validate_timezone
 
 
+class IanaTimezoneModel(BaseModel):
+    """Shared base for request models that carry an IANA timezone."""
+
+    timezone: str
+
+    @field_validator("timezone")
+    @classmethod
+    def timezone_must_be_iana(cls, value: str) -> str:
+        return validate_timezone(value)
+
+
 class AvailabilityWindowInput(BaseModel):
+    # API schedule times are local wall-clock values with minute precision.
     day_of_week: int = Field(ge=0, le=6)
     start_time: time
     end_time: time
@@ -14,6 +28,7 @@ class AvailabilityWindowInput(BaseModel):
     @field_validator("start_time", "end_time")
     @classmethod
     def require_minute_precision(cls, value: time) -> time:
+        # Offsets and seconds are rejected to keep recurring schedules unambiguous.
         if value.tzinfo is not None:
             raise ValueError("Schedule times are local wall-clock times without a timezone offset.")
         if value.second or value.microsecond:
@@ -23,10 +38,23 @@ class AvailabilityWindowInput(BaseModel):
     @field_validator("end_time")
     @classmethod
     def end_differs_from_start(cls, value: time, info):
+        # Equal endpoints would otherwise represent either an empty or ambiguous full-day shift.
         start = info.data.get("start_time")
         if start is not None and start == value:
             raise ValueError("Start and end times must differ.")
         return value
+
+
+def require_unique_schedule_windows(windows: list[AvailabilityWindowInput]) -> list[AvailabilityWindowInput]:
+    """Reject duplicate recurring windows during request validation."""
+    keys = [(window.day_of_week, window.start_time, window.end_time) for window in windows]
+    if len(keys) != len(set(keys)):
+        raise ValueError("Schedule windows must be unique.")
+    return windows
+
+
+# Reuse list-level validation for both agent creation and schedule replacement.
+UniqueScheduleWindows = Annotated[list[AvailabilityWindowInput], AfterValidator(require_unique_schedule_windows)]
 
 
 class AvailabilityWindowRead(AvailabilityWindowInput):
@@ -34,21 +62,16 @@ class AvailabilityWindowRead(AvailabilityWindowInput):
     id: int
 
 
-class AgentConfigUpdate(BaseModel):
-    timezone: str
+class AgentConfigUpdate(IanaTimezoneModel):
+    # Only editable agent settings are accepted by the configuration endpoint.
     max_active_tickets: int = Field(ge=1)
 
-    @field_validator("timezone")
-    @classmethod
-    def timezone_must_be_iana(cls, value: str) -> str:
-        return validate_timezone(value)
 
-
-class AgentCreate(BaseModel):
+class AgentCreate(IanaTimezoneModel):
+    # Creation accepts core settings and an optional set of weekly windows.
     name: str = Field(min_length=1, max_length=160)
-    timezone: str
     max_active_tickets: int = Field(default=5, ge=1)
-    availability_windows: list[AvailabilityWindowInput] = Field(default_factory=list)
+    availability_windows: UniqueScheduleWindows = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod
@@ -57,11 +80,6 @@ class AgentCreate(BaseModel):
         if not value:
             raise ValueError("Agent name cannot be blank.")
         return value
-
-    @field_validator("timezone")
-    @classmethod
-    def timezone_must_be_iana(cls, value: str) -> str:
-        return validate_timezone(value)
 
 
 class AgentRead(BaseModel):
@@ -74,6 +92,17 @@ class AgentRead(BaseModel):
     availability_windows: list[AvailabilityWindowRead]
 
 
+class AgentConfigRead(BaseModel):
+    """Response for timezone/capacity edits that do not read availability windows."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    company_id: int
+    name: str
+    timezone: str
+    max_active_tickets: int
+
+
 class AgentUTCAvailabilityRead(BaseModel):
     day_of_week: int
     start_time: str
@@ -81,6 +110,7 @@ class AgentUTCAvailabilityRead(BaseModel):
 
 
 class AgentOverviewRead(BaseModel):
+    # Read model for the workload, live availability, and UTC schedule overview.
     id: int
     name: str
     timezone: str
@@ -98,6 +128,7 @@ class CompanyRead(BaseModel):
 
 
 class TicketCreate(BaseModel):
+    # Require a human-readable, nonblank subject before a ticket is persisted.
     subject: str = Field(min_length=1, max_length=240)
 
     @field_validator("subject")
@@ -110,15 +141,8 @@ class TicketCreate(BaseModel):
 
 
 class TicketStatusUpdate(BaseModel):
-    status: str
-
-    @field_validator("status")
-    @classmethod
-    def status_must_be_supported(cls, value: str) -> str:
-        allowed = {"open", "in_progress", "pending", "resolved", "closed"}
-        if value not in allowed:
-            raise ValueError("Status must be open, in_progress, pending, resolved, or closed.")
-        return value
+    # Restrict ticket status values to the workload states supported by this service.
+    status: TicketStatus
 
 
 class TicketAgentRead(BaseModel):
@@ -134,6 +158,7 @@ class AvailableAgentRead(BaseModel):
 
 
 class TicketWorkflowRead(BaseModel):
+    # Assignment response includes either the selected agent or an actionable reason.
     id: int
     company_id: int
     subject: str
@@ -143,7 +168,7 @@ class TicketWorkflowRead(BaseModel):
     agent: Optional[TicketAgentRead] = None
     current_workload: Optional[int] = None
     assigned_at: Optional[datetime] = None
-    reason_code: Optional[str] = None
+    reason_code: Optional[UnassignedReasonCode] = None
     reason: str
     available_agents: list[AvailableAgentRead] = Field(default_factory=list)
 
@@ -158,14 +183,9 @@ class TicketListRead(BaseModel):
     assignment_reason: Optional[str] = None
 
 
-class CoverageConfigUpdate(BaseModel):
-    timezone: str
-    windows: list[AvailabilityWindowInput]
-
-    @field_validator("timezone")
-    @classmethod
-    def timezone_must_be_iana(cls, value: str) -> str:
-        return validate_timezone(value)
+class CoverageConfigUpdate(IanaTimezoneModel):
+    # Company timezone controls how required coverage windows are interpreted.
+    windows: UniqueScheduleWindows
 
 
 class CoverageWindowRead(AvailabilityWindowRead):

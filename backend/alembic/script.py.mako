@@ -4,6 +4,7 @@ Revision ID: ${up_revision}
 Revises: ${down_revision | comma,n}
 Create Date: ${create_date}
 """
+# Alembic fills in the revision metadata and operation blocks when generating a migration.
 from alembic import op
 import sqlalchemy as sa
 ${imports if imports else ""}

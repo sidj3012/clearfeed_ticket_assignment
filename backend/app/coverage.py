@@ -11,10 +11,12 @@ from .models import Agent, Company, CoverageWindow
 
 
 def utc_now() -> datetime:
+    # Centralize the clock so coverage calculations can be tested at fixed instants.
     return datetime.now(timezone.utc)
 
 
 def coverage_window_contains(window: CoverageWindow, weekday: int, local_time: time) -> bool:
+    # Treat end times as exclusive and associate overnight hours with their start day.
     previous_day = (weekday - 1) % 7
     if window.start_time < window.end_time:
         return window.day_of_week == weekday and window.start_time <= local_time < window.end_time
@@ -24,6 +26,7 @@ def coverage_window_contains(window: CoverageWindow, weekday: int, local_time: t
 
 
 def _segments(required: list[list[bool]], covered: list[list[bool]]) -> tuple[list[dict], list[dict]]:
+    # Compress minute-level coverage into readable contiguous ranges for the API.
     covered_periods: list[dict] = []
     gaps: list[dict] = []
     for weekday in range(7):
@@ -52,6 +55,7 @@ def build_coverage_summary(
     company: Company,
     instant: datetime | None = None,
 ) -> dict:
+    # Build a company-local week, then evaluate each minute against all agent schedules.
     company_zone = ZoneInfo(company.timezone)
     now_local = (instant or utc_now()).astimezone(company_zone)
     week_start = now_local.date() - timedelta(days=now_local.weekday())
@@ -77,6 +81,7 @@ def build_coverage_summary(
         ).all()
     )
 
+    # Boolean minute grids make overlapping schedules combine naturally.
     required = [[False] * 1440 for _ in range(7)]
     covered = [[False] * 1440 for _ in range(7)]
     while cursor < end_utc:

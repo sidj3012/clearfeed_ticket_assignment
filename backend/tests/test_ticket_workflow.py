@@ -1,3 +1,5 @@
+"""API workflow tests using an isolated in-memory database per test."""
+
 from datetime import datetime, time, timezone
 
 import pytest
@@ -20,6 +22,7 @@ FIXED_NOW = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
 
 @pytest.fixture
 def api(monkeypatch):
+    # Use SQLite for fast request-level tests and freeze time for predictable schedules.
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -47,6 +50,7 @@ def api(monkeypatch):
 
 
 def add_agent(testing_sessions, *, available=True, capacity=5, name="Alex"):
+    # Create an agent and optionally give them a Monday daytime shift.
     with testing_sessions() as session:
         agent = Agent(
             company_id=1,
@@ -71,6 +75,7 @@ def add_agent(testing_sessions, *, available=True, capacity=5, name="Alex"):
 
 
 def set_agent_windows(testing_sessions, agent_id, windows):
+    # Replace an agent's saved schedule with the supplied local-time windows.
     with testing_sessions() as session:
         session.query(AvailabilityWindow).filter(AvailabilityWindow.agent_id == agent_id).delete()
         session.add_all([
@@ -85,6 +90,7 @@ def set_agent_windows(testing_sessions, agent_id, windows):
         session.commit()
 
 
+# Agent setup and input validation.
 def test_create_agent_persists_configuration_and_availability(api):
     client, testing_sessions = api
 
@@ -145,6 +151,7 @@ def test_create_agent_validates_company_and_fields(api):
     assert bad_schedule.status_code == 422
 
 
+# Ticket lifecycle and assignment response behavior.
 def test_create_ticket_assigns_available_agent(api, monkeypatch):
     client, testing_sessions = api
     agent_id = add_agent(testing_sessions)
@@ -364,6 +371,7 @@ def test_models_reject_invalid_timezones_outside_api_validation():
         Agent(company_id=1, name="Invalid timezone", timezone="Not/A_Timezone")
 
 
+# Fair selection, capacity handling, and assignment explanation.
 def test_create_returns_capacity_reason_when_all_available_agents_are_full(api):
     client, testing_sessions = api
     agent_id = add_agent(testing_sessions, capacity=1)
@@ -520,6 +528,7 @@ def test_ticket_creation_rejects_unknown_company_and_blank_subject(api):
     assert blank_subject.status_code == 422
 
 
+# Company coverage calculations across days, zones, and overnight schedules.
 def test_coverage_reports_complete_coverage(api):
     client, testing_sessions = api
     agent_id = add_agent(testing_sessions)

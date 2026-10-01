@@ -7,13 +7,16 @@ from .models import Agent, Assignment, AvailabilityWindow, Company, CoverageWind
 
 
 def seed() -> None:
+    # Seed data only; Alembic migrations create and evolve the schema separately.
     with SessionLocal() as db:
+        # Reuse the demo company when seeding repeatedly instead of duplicating it.
         company = db.scalar(select(Company).where(Company.id == 1))
         if company is None:
             company = Company(id=1, name="Northstar Support", timezone="Asia/Kolkata")
             db.add(company)
             db.flush()
 
+        # The sample team spans timezones and shift patterns to make the UI demonstrable.
         seeded_agents = [
             (1, "Asha Patel", "Asia/Kolkata", 8),
             (2, "Jordan Lee", "America/New_York", 6),
@@ -60,6 +63,7 @@ def seed() -> None:
                      for day, start, end in windows]
                 )
 
+        # Add weekday coverage requirements once so rerunning the seed stays safe.
         for day in range(5):
             existing_window = db.scalar(
                 select(CoverageWindow).where(
@@ -79,6 +83,7 @@ def seed() -> None:
                     )
                 )
 
+        # Include multiple statuses to demonstrate which tickets consume capacity.
         ticket_seeds = [
             (1, "Customer cannot log in", "open", 1),
             (2, "Invoice needs correction", "in_progress", 2),

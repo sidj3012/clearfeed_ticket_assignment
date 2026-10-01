@@ -6,24 +6,27 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from ..assignment import active_workload, agent_is_available, utc_now
+from ..assignment import agent_is_available, agents_with_workload, utc_now
 from ..database import get_db
 from ..models import Agent, AvailabilityWindow, Company
 from ..schemas import (
     AgentConfigUpdate,
+    AgentConfigRead,
     AgentCreate,
     AgentOverviewRead,
     AgentRead,
-    AvailabilityWindowInput,
     AvailabilityWindowRead,
+    UniqueScheduleWindows,
 )
 
 
+# Share the company path prefix while keeping agent handlers separate from ticket routes.
 router = APIRouter(prefix="/api/companies/{company_id}", tags=["agents"])
 
 
 @router.get("/agents", response_model=list[AgentRead])
 def list_agents(company_id: int, db: Session = Depends(get_db)) -> list[Agent]:
+    # Include recurring windows so the setup screen can edit the full agent record.
     if db.get(Company, company_id) is None:
         raise HTTPException(status_code=404, detail="Company not found.")
     query = (
@@ -37,15 +40,9 @@ def list_agents(company_id: int, db: Session = Depends(get_db)) -> list[Agent]:
 
 @router.post("/agents", response_model=AgentRead, status_code=201)
 def create_agent(company_id: int, payload: AgentCreate, db: Session = Depends(get_db)) -> Agent:
+    # Validate the company and unique schedule rows before storing a new agent.
     if db.get(Company, company_id) is None:
         raise HTTPException(status_code=404, detail="Company not found.")
-
-    keys = [
-        (window.day_of_week, window.start_time, window.end_time)
-        for window in payload.availability_windows
-    ]
-    if len(keys) != len(set(keys)):
-        raise HTTPException(status_code=422, detail="Availability windows must be unique.")
 
     agent = Agent(
         company_id=company_id,
@@ -53,18 +50,13 @@ def create_agent(company_id: int, payload: AgentCreate, db: Session = Depends(ge
         timezone=payload.timezone,
         max_active_tickets=payload.max_active_tickets,
     )
+    # Attach schedules through the relationship so the response can reuse this object.
+    agent.availability_windows = [
+        AvailabilityWindow(**window.model_dump()) for window in payload.availability_windows
+    ]
     db.add(agent)
-    db.flush()
-    db.add_all([
-        AvailabilityWindow(agent_id=agent.id, **window.model_dump())
-        for window in payload.availability_windows
-    ])
     db.commit()
-    return db.scalar(
-        select(Agent)
-        .where(Agent.id == agent.id)
-        .options(selectinload(Agent.availability_windows))
-    )
+    return agent
 
 
 def availability_hours_in_utc(agent: Agent, instant: datetime) -> list[dict]:
@@ -88,6 +80,7 @@ def availability_hours_in_utc(agent: Agent, instant: datetime) -> list[dict]:
             cursor = max(local_start.astimezone(utc_zone), datetime.combine(week_start, time.min, tzinfo=utc_zone))
             end_utc = min(local_end.astimezone(utc_zone), datetime.combine(week_end, time.min, tzinfo=utc_zone))
 
+            # Split overnight ranges at UTC midnight for a simple weekday/time response.
             while cursor < end_utc:
                 next_midnight = datetime.combine(cursor.date() + timedelta(days=1), time.min, tzinfo=utc_zone)
                 segment_end = min(next_midnight, end_utc)
@@ -104,42 +97,37 @@ def availability_hours_in_utc(agent: Agent, instant: datetime) -> list[dict]:
 
 @router.get("/agents/overview", response_model=list[AgentOverviewRead])
 def list_agent_overview(company_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    # Combine live workload and schedule-derived availability for the agents dashboard.
     if db.get(Company, company_id) is None:
         raise HTTPException(status_code=404, detail="Company not found.")
     instant = utc_now()
-    agents = list(
-        db.scalars(
-            select(Agent)
-            .where(Agent.company_id == company_id)
-            .options(selectinload(Agent.availability_windows))
-            .order_by(Agent.id)
-        ).all()
-    )
+    # Fetch all agent workload totals in one query instead of issuing one count per agent.
+    agents = agents_with_workload(db, company_id)
     return [
         {
             "id": agent.id,
             "name": agent.name,
             "timezone": agent.timezone,
             "max_active_tickets": agent.max_active_tickets,
-            "active_ticket_count": active_workload(db, agent.id),
+            "active_ticket_count": workload,
             "is_available": agent_is_available(agent, instant),
             "availability_hours_utc": availability_hours_in_utc(agent, instant),
         }
-        for agent in agents
+        for agent, workload in agents
     ]
 
 
-@router.put("/agents/{agent_id}", response_model=AgentRead)
+@router.put("/agents/{agent_id}", response_model=AgentConfigRead)
 def update_agent_config(
     company_id: int,
     agent_id: int,
     payload: AgentConfigUpdate,
     db: Session = Depends(get_db),
 ) -> Agent:
+    # Update the agent's timezone and capacity without replacing their weekly schedule.
     agent = db.scalar(
         select(Agent)
         .where(Agent.id == agent_id, Agent.company_id == company_id)
-        .options(selectinload(Agent.availability_windows))
     )
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found for this company.")
@@ -154,17 +142,15 @@ def update_agent_config(
 def replace_agent_availability(
     company_id: int,
     agent_id: int,
-    windows: list[AvailabilityWindowInput],
+    windows: UniqueScheduleWindows,
     db: Session = Depends(get_db),
 ) -> list[AvailabilityWindow]:
+    # Replace all recurring windows atomically so a failed schedule cannot leave partial data.
     agent = db.scalar(select(Agent).where(Agent.id == agent_id, Agent.company_id == company_id))
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found for this company.")
 
-    keys = [(window.day_of_week, window.start_time, window.end_time) for window in windows]
-    if len(keys) != len(set(keys)):
-        raise HTTPException(status_code=422, detail="Availability windows must be unique.")
-
+    # Roll back the delete and inserts together if a database constraint rejects a window.
     try:
         db.query(AvailabilityWindow).filter(AvailabilityWindow.agent_id == agent_id).delete()
         records = [AvailabilityWindow(agent_id=agent_id, **window.model_dump()) for window in windows]
@@ -172,6 +158,7 @@ def replace_agent_availability(
         db.commit()
     except IntegrityError:
         db.rollback()
+        # The JSON is valid, but its schedule violates a domain constraint, so return 422.
         raise HTTPException(status_code=422, detail="Availability contains an invalid or duplicate window.") from None
 
     return list(

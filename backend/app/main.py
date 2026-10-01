@@ -1,5 +1,4 @@
 import os
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,10 +19,13 @@ from .schemas import (
     TicketStatusUpdate,
     TicketWorkflowRead,
 )
+from .timezones import validate_timezone
 
 
+# Agent management lives in its own router; ticket and company routes stay here.
 app = FastAPI(title="Ticket Assignment API", version="0.1.0")
 app.include_router(agents_router)
+# Keep browser access limited to explicitly configured frontend origins.
 origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")]
 app.add_middleware(
     CORSMiddleware,
@@ -36,11 +38,13 @@ app.add_middleware(
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    # Simple process check for local tooling and service health probes.
     return {"status": "ok"}
 
 
 @app.get("/api/companies/{company_id}", response_model=CompanyRead)
 def get_company(company_id: int, db: Session = Depends(get_db)) -> Company:
+    # Return the company settings needed to initialize the management UI.
     company = db.get(Company, company_id)
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found.")
@@ -53,9 +57,10 @@ def update_company_timezone(
     timezone: str,
     db: Session = Depends(get_db),
 ) -> Company:
+    # Validate before writing so downstream schedule conversion always has a usable zone.
     try:
-        ZoneInfo(timezone)
-    except (ZoneInfoNotFoundError, ValueError):
+        validate_timezone(timezone)
+    except ValueError:
         raise HTTPException(status_code=422, detail="Use a valid IANA timezone, such as Asia/Kolkata.") from None
     company = db.get(Company, company_id)
     if company is None:
@@ -68,6 +73,7 @@ def update_company_timezone(
 
 @app.get("/api/companies/{company_id}/coverage", response_model=CoverageRead)
 def get_coverage(company_id: int, db: Session = Depends(get_db)) -> dict:
+    # Report where configured company coverage is met by at least one agent.
     company = db.get(Company, company_id)
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found.")
@@ -80,13 +86,10 @@ def replace_coverage(
     payload: CoverageConfigUpdate,
     db: Session = Depends(get_db),
 ) -> dict:
+    # Replace the team's required schedule as one request, rejecting duplicate windows.
     company = db.get(Company, company_id)
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found.")
-
-    keys = [(window.day_of_week, window.start_time, window.end_time) for window in payload.windows]
-    if len(keys) != len(set(keys)):
-        raise HTTPException(status_code=422, detail="Coverage windows must be unique.")
 
     company.timezone = payload.timezone
     db.query(CoverageWindow).filter(CoverageWindow.company_id == company_id).delete()
@@ -103,6 +106,7 @@ def replace_coverage(
     status_code=status.HTTP_201_CREATED,
 )
 def create_ticket(company_id: int, payload: TicketCreate, db: Session = Depends(get_db)) -> dict:
+    # Persist first to obtain the ticket ID, then assign in the same transaction.
     company = db.get(Company, company_id)
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found.")
@@ -117,6 +121,7 @@ def create_ticket(company_id: int, payload: TicketCreate, db: Session = Depends(
 
 @app.get("/api/companies/{company_id}/tickets", response_model=list[TicketListRead])
 def list_tickets(company_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    # Load assignment and agent together to avoid extra queries while formatting results.
     if db.get(Company, company_id) is None:
         raise HTTPException(status_code=404, detail="Company not found.")
 
@@ -151,6 +156,7 @@ def list_tickets(company_id: int, db: Session = Depends(get_db)) -> list[dict]:
     response_model=TicketWorkflowRead,
 )
 def retry_ticket_assignment(company_id: int, ticket_id: int, db: Session = Depends(get_db)) -> dict:
+    # Retry only a ticket belonging to the requested company; assignment is idempotent.
     ticket = db.scalar(select(Ticket).where(Ticket.id == ticket_id, Ticket.company_id == company_id))
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found for this company.")
@@ -161,6 +167,7 @@ def retry_ticket_assignment(company_id: int, ticket_id: int, db: Session = Depen
 
 @app.patch("/api/tickets/{ticket_id}", response_model=TicketListRead)
 def update_ticket_status(ticket_id: int, payload: TicketStatusUpdate, db: Session = Depends(get_db)) -> dict:
+    # Status changes update workload eligibility and the returned ticket view.
     ticket = db.scalar(
         select(Ticket)
         .where(Ticket.id == ticket_id)
@@ -168,7 +175,7 @@ def update_ticket_status(ticket_id: int, payload: TicketStatusUpdate, db: Sessio
     )
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found.")
-    ticket.status = payload.status
+    ticket.status = payload.status.value
     db.commit()
     return {
         "id": ticket.id,

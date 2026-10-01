@@ -1,3 +1,4 @@
+/* Shared palette and semantic colors for all workspace views. */
 :root {
   color-scheme: light;
   --ink: #17212b;
@@ -12,11 +13,13 @@
   --success: #216c48;
 }
 
+/* Keep sizing predictable and set the global page typography. */
 * { box-sizing: border-box; }
 html { background: var(--canvas); }
 body { margin: 0; color: var(--ink); background: var(--canvas); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
+/* Header, page width, title, and UTC clock layout. */
 .shell { min-height: 100vh; }
 .topbar { height: 64px; padding: 0 max(28px, calc((100vw - 1120px) / 2)); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
@@ -31,6 +34,7 @@ h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.2; letter-spacing: -.04
 .utc-clock { display: grid; gap: 5px; border: 1px solid var(--line); border-radius: 8px; background: white; padding: 10px 13px; font-variant-numeric: tabular-nums; }
 .utc-clock span { color: var(--muted); font-size: 10px; }
 .utc-clock strong { font-size: 12px; }
+/* Shared status messages and cards use simple neutral surfaces. */
 .notice { margin: 0 0 18px; border-radius: 8px; padding: 12px 14px; }
 .notice.success { border: 1px solid #b7dcc9; background: #eff8f2; color: var(--success); }
 .notice.error { border: 1px solid #edc3bf; background: #fff5f4; color: var(--danger); }
@@ -40,6 +44,7 @@ h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.2; letter-spacing: -.04
 .section-copy h2, .section-heading h2 { margin-bottom: 5px; font-size: 17px; letter-spacing: -.02em; }
 .section-copy p:last-child, .section-heading p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
 .section-copy .eyebrow { margin-bottom: 6px; font-size: 10px; }
+/* Inputs, section headings, and primary/secondary actions. */
 .company-control { width: min(100%, 270px); }
 input, select { width: 100%; min-height: 39px; border: 1px solid #cfd8dd; border-radius: 7px; background: white; color: var(--ink); padding: 8px 10px; outline: none; }
 input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(23, 107, 103, .12); }
@@ -65,6 +70,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .button.primary:hover:not(:disabled) { background: var(--accent-dark); }
 .button.secondary { border: 1px solid #cfd8dd; background: white; color: #35434d; }
 .button.secondary:hover { border-color: #9cabb3; background: #f8fafb; }
+/* Agent setup cards and their recurring schedule rows. */
 .agent-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding-bottom: 23px; border-bottom: 1px solid #edf0f2; }
 .agent-fields label { color: #35434d; font-size: 12px; font-weight: 600; }
 .agent-fields input, .agent-fields select { display: block; margin-top: 7px; font-weight: 400; }
@@ -79,12 +85,14 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .icon-button:hover { border-color: #ead0cd; background: #fff5f4; color: var(--danger); }
 .no-hours { margin: 4px 0 0; border: 1px dashed #cfd8dd; border-radius: 7px; padding: 14px; color: var(--muted); font-size: 12px; text-align: center; }
 .empty-state { border: 1px dashed #cfd8dd; border-radius: 10px; background: white; padding: 38px 20px; color: var(--muted); text-align: center; }
+/* Empty states, screen-reader labels, and the navigation between views. */
 .footer-note { margin-top: 18px; color: #77838c; font-size: 11px; text-align: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .view-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: -7px 0 25px; }
 .view-tabs button { position: relative; border: 0; background: transparent; padding: 10px 13px 12px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .view-tabs button.active { color: var(--accent-dark); }
 .view-tabs button.active::after { position: absolute; right: 9px; bottom: -1px; left: 9px; height: 2px; background: var(--accent); content: ""; }
+/* Ticket creation form, queue rows, status labels, and actions. */
 .ticket-create-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; border: 1px solid var(--line); border-radius: 12px; background: white; padding: 21px 24px; margin-bottom: 30px; }
 .ticket-create-card h2 { margin-bottom: 5px; font-size: 17px; }
 .ticket-create-card p:last-child { margin-bottom: 0; color: var(--muted); font-size: 12px; }
@@ -107,6 +115,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .status-resolved, .status-closed { background: #eef0f1; color: #67727a; }
 .ticket-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; }
 .ticket-actions select { width: 125px; min-height: 36px; font-size: 11px; text-transform: capitalize; }
+/* Coverage editor and its result summary/table. */
 .coverage-config, .coverage-results { border: 1px solid var(--line); border-radius: 12px; background: white; padding: 21px 24px; }
 .coverage-config { margin-bottom: 28px; }
 .coverage-config-heading, .coverage-windows-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -133,6 +142,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .coverage-state { justify-self: end; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 600; }
 .coverage-state.covered { background: #eaf4ee; color: #3c684c; }
 .coverage-state.gap { background: #faf3e6; color: #85652d; }
+/* Agent overview cards emphasize present workload and availability. */
 .agent-overview-list { display: grid; gap: 12px; }
 .agent-overview-card { border: 1px solid var(--line); border-radius: 10px; background: white; padding: 18px 20px; }
 .agent-overview-heading { display: flex; align-items: center; gap: 12px; }
@@ -145,6 +155,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .utc-hours ul { display: flex; flex-wrap: wrap; gap: 6px 15px; margin: 0; padding: 0; list-style: none; color: #35434d; font-size: 12px; font-variant-numeric: tabular-nums; }
 .utc-hours > strong { font-size: 12px !important; font-weight: 500; color: var(--muted); }
 
+/* Stack forms and cards on narrow screens while preserving readable controls. */
 @media (max-width: 640px) {
   .topbar { padding: 0 18px; }
   .content { width: min(100% - 28px, 960px); padding-top: 30px; }

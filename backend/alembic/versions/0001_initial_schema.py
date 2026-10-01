@@ -14,6 +14,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create the core entities first so dependent foreign keys have their targets.
     op.create_table(
         "companies",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -81,6 +82,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Drop dependent tables before the companies and agents they reference.
     op.drop_table("assignments")
     op.drop_table("tickets")
     op.drop_table("coverage_windows")

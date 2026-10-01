@@ -1,3 +1,5 @@
+"""Unit tests for local-time schedule matching and overnight boundaries."""
+
 from datetime import datetime, time, timezone
 
 from app.assignment import agent_is_available
@@ -5,6 +7,7 @@ from app.models import Agent, AvailabilityWindow
 
 
 def make_agent(windows, timezone_name="UTC"):
+    # Build a transient agent so schedule rules can be tested without a database.
     agent = Agent(id=1, company_id=1, name="Test Agent", timezone=timezone_name, max_active_tickets=5)
     agent.availability_windows = [
         AvailabilityWindow(
@@ -20,10 +23,12 @@ def make_agent(windows, timezone_name="UTC"):
 
 
 def at(hour, minute=0, day=28):
+    # September 28, 2026 is a Monday, which keeps weekday expectations explicit.
     return datetime(2026, 9, day, hour, minute, tzinfo=timezone.utc)
 
 
 def test_same_day_availability_includes_start_and_excludes_end():
+    # Schedule ranges include the start minute and exclude the end minute.
     agent = make_agent([(0, "09:00", "17:00")])
 
     assert agent_is_available(agent, at(9)) is True
@@ -33,6 +38,7 @@ def test_same_day_availability_includes_start_and_excludes_end():
 
 
 def test_overnight_availability_spans_midnight_and_excludes_end():
+    # Overnight windows continue into the following local day, stopping at end time.
     agent = make_agent([(0, "22:00", "02:00")])
 
     assert agent_is_available(agent, at(23)) is True
