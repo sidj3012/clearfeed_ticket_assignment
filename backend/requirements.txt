@@ -1,0 +1,11 @@
+# API server and schema validation.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+# Persistence, PostgreSQL driver, and versioned migrations.
+SQLAlchemy>=2.0,<3.0
+alembic>=1.13,<2.0
+psycopg[binary]>=3.2,<4.0
+pydantic>=2.8,<3.0
+# API-level test runner and test client.
+pytest>=8.0,<9.0
+httpx>=0.27,<1.0

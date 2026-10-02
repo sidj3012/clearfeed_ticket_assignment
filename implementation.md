@@ -613,6 +613,19 @@ POST /api/companies/{company_id}/tickets/{ticket_id}/assign
 
 Assigns the ticket or returns a clear no-assignment reason.
 
+This endpoint also retries assignment for a previously unassigned ticket. Repeated requests return the existing assignment.
+
+
+### Ticket management
+
+```text
+POST /api/companies/{company_id}/tickets
+GET /api/companies/{company_id}/tickets
+PATCH /api/tickets/{ticket_id}
+```
+
+Ticket creation starts with `open` status and immediately attempts assignment using the shared assignment service. If no agent is eligible, the ticket is still created and the response explains why it remains unassigned. The list endpoint returns tickets with their assigned agent, when present. The status endpoint accepts `open`, `in_progress`, `pending`, `resolved`, or `closed`.
+
 ### Agent list
 
 ```text
@@ -620,6 +633,20 @@ GET /api/companies/{company_id}/agents
 ```
 
 Returns agents, timezone, capacity, and availability configuration needed by the UI.
+
+### Agent creation
+
+```text
+POST /api/companies/{company_id}/agents
+```
+
+Creates an agent for an existing company. The request includes a name and IANA timezone, may set `max_active_tickets` (default `5`), and may include recurring availability windows (default empty). The response returns the created agent and its saved windows.
+
+```text
+GET /api/companies/{company_id}/agents/overview
+```
+
+Returns each agent's active-ticket count, current scheduled availability, and recurring availability windows converted to UTC for the current UTC week.
 
 ### Agent availability
 
@@ -700,13 +727,14 @@ Returns the configured required coverage and calculated covered/gap periods for 
 
 ## 11. UI
 
-The UI will have two main areas.
+The UI will have four areas: team setup, agent overview, tickets, and coverage. Timezone fields use an IANA timezone dropdown.
 
 ### Availability
 
 The team lead can:
 
 - see the list of agents
+- add an agent with a name, timezone, ticket limit, and optional initial weekly availability
 - see each agent's timezone
 - set the maximum active tickets
 - add/edit recurring weekly availability
@@ -724,6 +752,10 @@ The team lead can:
 - see coverage gaps inside required coverage windows
 
 A simple weekly table/calendar view is enough for the MVP.
+
+### Agent overview
+
+The Agents page will display the current UTC time and, for each agent, their name, active-ticket count against their limit, current scheduled availability, and schedule ranges converted to UTC for the current UTC week.
 
 The UI will include a lightweight Tickets section for viewing existing tickets and changing their status.
 
@@ -1043,6 +1075,25 @@ Test:
 - `resolved` does not count
 - `closed` does not count
 - changing a ticket to `resolved` frees capacity for later assignment decisions
+
+
+### Agent Overview
+
+Test:
+
+- reports each agent's active workload and ticket limit
+- reports current scheduled availability using the current UTC instant
+- converts recurring hours to UTC and includes weekday changes
+
+
+### Agent Creation
+
+Test:
+
+- creates an agent for the company in the request path
+- persists the agent's name, timezone, ticket limit, and optional availability windows
+- uses the default ticket limit and empty schedule when omitted
+- rejects an unknown company, blank name, invalid timezone, non-positive limit, and invalid schedule
 
 ---
 

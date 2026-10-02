@@ -1,0 +1,21 @@
+services:
+  # Local PostgreSQL instance used by the API, seed command, and locking tests.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ticket_assignment
+      POSTGRES_USER: ticket_assignment
+      POSTGRES_PASSWORD: ticket_assignment
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticket_assignment -d ticket_assignment"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  # Preserve the local database between Compose restarts.
+  postgres_data:
